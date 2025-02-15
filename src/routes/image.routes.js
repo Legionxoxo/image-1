@@ -16,7 +16,44 @@ const {
 
 const IMAGES_DIR = path.join(process.cwd(), "images");
 
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+    storage: multer.memoryStorage(),
+    fileFilter: (req, file, cb) => {
+        // Accept common image formats including TIFF
+        const allowedTypes = [
+            "image/jpeg",
+            "image/png",
+            "image/gif",
+            "image/webp",
+            "image/tiff",
+            "image/tif",
+            "image/arw",
+            "application/octet-stream",
+        ];
+
+        // Check file extension
+        const ext = path.extname(file.originalname).toLowerCase();
+        const allowedExtensions = [
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".gif",
+            ".webp",
+            ".arw",
+            ".tif",
+            ".tiff",
+        ];
+
+        if (
+            allowedTypes.includes(file.mimetype) ||
+            allowedExtensions.includes(ext)
+        ) {
+            cb(null, true);
+        } else {
+            cb(new Error("File type not supported"), false);
+        }
+    },
+});
 
 router.get("/images", async (req, res) => {
     try {
@@ -74,7 +111,10 @@ router.post("/upload", upload.single("image"), async (req, res) => {
         );
 
         // Convert to PNG
-        const pngBuffer = await convertToPNG(req.file.buffer);
+        const pngBuffer = await convertToPNG(
+            req.file.buffer,
+            req.file.originalname
+        );
 
         // Generate PNG filename
         const pngFilename = req.file.originalname.split(".")[0] + ".png";
@@ -142,6 +182,9 @@ router.get("/:folder/:filename", async (req, res) => {
                     ".png": "image/png",
                     ".gif": "image/gif",
                     ".webp": "image/webp",
+                    ".arw": "image/arw",
+                    ".tif": "image/tiff",
+                    ".tiff": "image/tiff",
                 }[ext] || "application/octet-stream";
 
             res.setHeader("Content-Type", contentType);
@@ -180,6 +223,9 @@ router.get("/download/:folder/:filename", async (req, res) => {
                     ".png": "image/png",
                     ".gif": "image/gif",
                     ".webp": "image/webp",
+                    ".arw": "image/arw",
+                    ".tif": "image/tiff",
+                    ".tiff": "image/tiff",
                 }[ext] || "application/octet-stream";
 
             res.setHeader("Content-Type", contentType);

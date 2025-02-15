@@ -1,5 +1,7 @@
 const sharp = require("sharp");
+const { spawn } = require('child_process');
 const path = require("path");
+const os = require('os');
 const fsPromises = require("fs").promises;
 
 const createThumbnail = async (imagePath) => {
@@ -126,9 +128,79 @@ const convertToPng = async (input) => {
     };
 };
 
-async function convertToPNG(buffer) {
+async function convertRawToPNG(buffer) {
     try {
-        const convertedBuffer = await sharp(buffer).png().toBuffer();
+        // Create a temporary file for the RAW image
+        const tempRawPath = path.join(os.tmpdir(), `temp-${Date.now()}.arw`);
+        const tempPpmPath = path.join(os.tmpdir(), `temp-${Date.now()}.ppm`);
+        
+        // Write the buffer to a temporary file
+        await fsPromises.writeFile(tempRawPath, buffer);
+        
+        // Convert RAW to PPM using dcraw
+        await new Promise((resolve, reject) => {
+            const dcraw = spawn('dcraw', ['-c', tempRawPath]);
+            const writeStream = fsPromises.createWriteStream(tempPpmPath);
+            
+            dcraw.stdout.pipe(writeStream);
+            
+            dcraw.on('close', (code) => {
+                if (code === 0) resolve();
+                else reject(new Error(`dcraw process exited with code ${code}`));
+            });
+            
+            dcraw.on('error', reject);
+        });
+        
+        // Read the PPM file
+        const ppmBuffer = await fsPromises.readFile(tempPpmPath);
+        
+        // Convert PPM to PNG using Sharp
+        const pngBuffer = await sharp(ppmBuffer)
+            .png({
+                quality: 100,
+                compressionLevel: 9,
+                effort: 10,
+            })
+            .toBuffer();
+            
+        // Clean up temporary files
+        await Promise.all([
+            fsPromises.unlink(tempRawPath),
+            fsPromises.unlink(tempPpmPath)
+        ]);
+        
+        return pngBuffer;
+    } catch (error) {
+        console.error("Error converting RAW file:", error);
+        throw error;
+    }
+}
+
+async function convertToPNG(buffer, originalFilename) {
+    try {
+        // Check if file is RAW format
+        const isRaw = originalFilename.toLowerCase().endsWith('.arw');
+        
+        if (isRaw) {
+            return await convertRawToPNG(buffer);
+        }
+        
+        // For non-RAW images, use regular Sharp conversion
+        const convertedBuffer = await sharp(buffer, {
+            failOnError: false,
+            limitInputPixels: false,
+            sequentialRead: true,
+        })
+        .rotate() // Auto-rotate based on EXIF
+        .png({
+            quality: 100,
+            compressionLevel: 9,
+            effort: 10,
+            palette: false,
+        })
+        .toBuffer();
+        
         return convertedBuffer;
     } catch (error) {
         console.error("Error converting image:", error);

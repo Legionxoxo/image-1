@@ -155,6 +155,8 @@
             border-radius: 8px;
             background: #fff;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
         }
         .file-card img {
             width: 100%;
@@ -165,6 +167,13 @@
         }
         .file-info {
             margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+        }
+        .file-info p {
+            margin: 5px 0;
+            font-size: 13px;
+            color: #666;
         }
         .file-actions {
             display: flex;
@@ -238,6 +247,24 @@
         .download-btn:hover {
             background: #218838;
         }
+        .file-icon {
+            text-align: center;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .file-image-icon {
+            font-size: 48px;
+            display: block;
+            margin-bottom: 10px;
+        }
+        .filename-display {
+            word-break: break-all;
+            margin: 0;
+            font-size: 14px;
+            color: #333;
+        }
     </style>
 </head>
 <body>
@@ -246,7 +273,10 @@
     <!-- Upload Form -->
     <div class="upload-section">
         <form id="uploadForm">
-            <input type="file" id="imageInput" accept="image/*" required>
+            <input type="file" 
+                   id="imageInput" 
+                   accept="image/*,.arw" 
+                   required>
             <button type="submit">Upload</button>
         </form>
     </div>
@@ -283,13 +313,21 @@
                 
                 fileList.innerHTML = files.map(file => `
                     <div class="file-card">
-                        <img src="/api/image/${file.key}" 
-                             alt="${file.filename}"
-                             onclick="showFullImage('${file.key}')"
-                             style="${folder === 'original' ? 'height: auto; max-height: 400px;' : 'height: 200px; object-fit: cover;'}"
-                        >
+                        ${folder === 'original' ? 
+                            // For original files, show filename with an icon
+                            `<div class="file-icon">
+                                <i class="file-image-icon">📄</i>
+                                <p class="filename-display">${file.filename}</p>
+                            </div>` 
+                            : 
+                            // For converted files, show thumbnail
+                            `<img src="/api/image/${file.key}" 
+                                 alt="${file.filename}"
+                                 onclick="showFullImage('${file.key}')"
+                                 style="height: 200px; object-fit: cover;"
+                            >`
+                        }
                         <div class="file-info">
-                            <p>Filename: ${file.filename}</p>
                             <p>Size: ${file.size}</p>
                             <p>Modified: ${new Date(file.lastModified).toLocaleString()}</p>
                         </div>
