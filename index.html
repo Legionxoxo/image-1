@@ -143,29 +143,211 @@
             max-width: 500px;
             margin: 10px 0;
         }
+        .file-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .file-card {
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 8px;
+            background: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .file-card img {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .file-info {
+            margin-top: 10px;
+        }
+        .file-actions {
+            display: flex;
+            justify-content: flex-start;
+            margin-top: 10px;
+        }
+        .delete-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .delete-btn:hover {
+            background: #c82333;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+        }
+        .modal-content {
+            position: relative;
+            max-width: 90%;
+            max-height: 90%;
+            margin: 20px auto;
+        }
+        .modal-content img {
+            max-width: 100%;
+            max-height: 90vh;
+        }
+        .close-modal {
+            position: absolute;
+            top: -30px;
+            right: 0;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+        }
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .tab {
+            padding: 10px 20px;
+            background: #f0f0f0;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .tab.active {
+            background: #007bff;
+            color: white;
+        }
+        .download-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        .download-btn:hover {
+            background: #218838;
+        }
     </style>
 </head>
 <body>
     <h1>Image Converter</h1>
-    <form id="uploadForm">
-        <input type="file" id="imageInput" accept="image/*" required>
-        <button type="submit">Upload</button>
-    </form>
+    
+    <!-- Upload Form -->
+    <div class="upload-section">
+        <form id="uploadForm">
+            <input type="file" id="imageInput" accept="image/*" required>
+            <button type="submit">Upload</button>
+        </form>
+    </div>
 
-    <div class="image-container">
-        <h3>Original Image:</h3>
-        <img id="originalImage" src="" alt="Original image">
-        
-        <h3>Converted PNG:</h3>
-        <img id="convertedImage" src="" alt="Converted image">
+    <!-- Tabs -->
+    <div class="tabs">
+        <button class="tab active" data-folder="original">Original Files</button>
+        <button class="tab" data-folder="converted">Converted Files</button>
+    </div>
+
+    <!-- File List -->
+    <div class="file-list" id="fileList"></div>
+
+    <!-- Modal for full-size image -->
+    <div class="modal" id="imageModal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <img id="modalImage" src="" alt="Full size image">
+        </div>
     </div>
 
     <script>
-        const uploadForm = document.getElementById('uploadForm');
-        const originalImage = document.getElementById('originalImage');
-        const convertedImage = document.getElementById('convertedImage');
+        const fileList = document.getElementById('fileList');
+        const modal = document.getElementById('imageModal');
+        const modalImage = document.getElementById('modalImage');
+        const tabs = document.querySelectorAll('.tab');
+        let currentFolder = 'original';
 
-        uploadForm.addEventListener('submit', async (e) => {
+        // Load files for the current folder
+        async function loadFiles(folder) {
+            try {
+                const response = await fetch(`/api/image/list/${folder}`);
+                const files = await response.json();
+                
+                fileList.innerHTML = files.map(file => `
+                    <div class="file-card">
+                        <img src="/api/image/${file.key}" 
+                             alt="${file.filename}"
+                             onclick="showFullImage('${file.key}')"
+                             style="${folder === 'original' ? 'height: auto; max-height: 400px;' : 'height: 200px; object-fit: cover;'}"
+                        >
+                        <div class="file-info">
+                            <p>Filename: ${file.filename}</p>
+                            <p>Size: ${file.size}</p>
+                            <p>Modified: ${new Date(file.lastModified).toLocaleString()}</p>
+                        </div>
+                        <div class="file-actions">
+                            <button class="download-btn" onclick="downloadFile('${file.key}', '${file.filename}')">Download</button>
+                            <button class="delete-btn" onclick="deleteFile('${file.key}')">Delete</button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading files:', error);
+                alert('Failed to load files');
+            }
+        }
+
+        // Delete file
+        async function deleteFile(key) {
+            if (!confirm('Are you sure you want to delete this file?')) return;
+            
+            try {
+                const response = await fetch(`/api/image/${key}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    loadFiles(currentFolder);
+                } else {
+                    throw new Error('Delete failed');
+                }
+            } catch (error) {
+                console.error('Delete error:', error);
+                alert('Failed to delete file');
+            }
+        }
+
+        // Show full-size image in modal
+        function showFullImage(key) {
+            modalImage.src = `/api/image/${key}`;
+            modal.style.display = 'block';
+        }
+
+        // Close modal
+        modal.querySelector('.close-modal').onclick = () => {
+            modal.style.display = 'none';
+        }
+
+        // Handle tab clicks
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                tabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                currentFolder = tab.dataset.folder;
+                loadFiles(currentFolder);
+            });
+        });
+
+        // Handle upload form
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
             const formData = new FormData();
@@ -178,17 +360,43 @@
                     body: formData
                 });
 
-                const data = await response.json();
-                
-                if (data.original && data.converted) {
-                    originalImage.src = `/api/image/${data.original}`;
-                    convertedImage.src = `/api/image/${data.converted}`;
+                if (response.ok) {
+                    fileInput.value = '';
+                    loadFiles(currentFolder);
+                } else {
+                    throw new Error('Upload failed');
                 }
             } catch (error) {
                 console.error('Upload failed:', error);
                 alert('Upload failed. Please try again.');
             }
         });
+
+        // Add download function
+        async function downloadFile(key, filename) {
+            try {
+                const response = await fetch(`/api/image/download/${key}`);
+                const blob = await response.blob();
+                
+                // Create a temporary link to trigger the download
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                
+                // Cleanup
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            } catch (error) {
+                console.error('Download error:', error);
+                alert('Failed to download file');
+            }
+        }
+
+        // Initial load
+        loadFiles(currentFolder);
     </script>
 </body>
 </html> 

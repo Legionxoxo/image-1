@@ -1,4 +1,9 @@
-const { PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
+const {
+    PutObjectCommand,
+    GetObjectCommand,
+    ListObjectsV2Command,
+    DeleteObjectCommand,
+} = require("@aws-sdk/client-s3");
 const { wasabiClient, wasabiConfig } = require("../config/wasabi.config");
 
 async function uploadToWasabi(buffer, filename, folder) {
@@ -33,4 +38,46 @@ async function getFromWasabi(key) {
     }
 }
 
-module.exports = { uploadToWasabi, getFromWasabi };
+async function listWasabiFiles(folder) {
+    try {
+        const command = new ListObjectsV2Command({
+            Bucket: wasabiConfig.bucket,
+            Prefix: `${folder}/`,
+        });
+
+        const response = await wasabiClient.send(command);
+        return (
+            response.Contents?.map((item) => ({
+                key: item.Key,
+                size: (item.Size / 1024).toFixed(2) + " KB",
+                lastModified: item.LastModified,
+                filename: item.Key.split("/").pop(),
+            })) || []
+        );
+    } catch (error) {
+        console.error("Error listing Wasabi files:", error);
+        throw error;
+    }
+}
+
+async function deleteFromWasabi(key) {
+    try {
+        const command = new DeleteObjectCommand({
+            Bucket: wasabiConfig.bucket,
+            Key: key,
+        });
+
+        await wasabiClient.send(command);
+        return true;
+    } catch (error) {
+        console.error("Error deleting from Wasabi:", error);
+        throw error;
+    }
+}
+
+module.exports = {
+    uploadToWasabi,
+    getFromWasabi,
+    listWasabiFiles,
+    deleteFromWasabi,
+};

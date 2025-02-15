@@ -7,7 +7,12 @@ const {
     convertToPNG,
 } = require("../functions/image-converter");
 const multer = require("multer");
-const { uploadToWasabi, getFromWasabi } = require("../functions/s3-utils");
+const {
+    uploadToWasabi,
+    getFromWasabi,
+    listWasabiFiles,
+    deleteFromWasabi,
+} = require("../functions/s3-utils");
 
 const IMAGES_DIR = path.join(process.cwd(), "images");
 
@@ -92,13 +97,94 @@ router.post("/upload", upload.single("image"), async (req, res) => {
     }
 });
 
+// List files in a folder
+router.get("/list/:folder", async (req, res) => {
+    try {
+        const { folder } = req.params;
+        const files = await listWasabiFiles(folder);
+        res.json(files);
+    } catch (error) {
+        console.error("List error:", error);
+        res.status(500).json({ error: "Failed to list files" });
+    }
+});
+
+// Delete a file
+router.delete("/:folder/:filename", async (req, res) => {
+    try {
+        const { folder, filename } = req.params;
+        const key = `${folder}/${filename}`;
+        await deleteFromWasabi(key);
+        res.json({ message: "File deleted successfully" });
+    } catch (error) {
+        console.error("Delete error:", error);
+        res.status(500).json({ error: "Failed to delete file" });
+    }
+});
+
+// Get file content
 router.get("/:folder/:filename", async (req, res) => {
     try {
         const { folder, filename } = req.params;
         const key = `${folder}/${filename}`;
         const file = await getFromWasabi(key);
 
-        res.setHeader("Content-Type", "image/png");
+        // Set appropriate content type based on folder
+        if (folder === "converted") {
+            res.setHeader("Content-Type", "image/png");
+        } else {
+            // For original files, try to detect content type from filename
+            const ext = path.extname(filename).toLowerCase();
+            const contentType =
+                {
+                    ".jpg": "image/jpeg",
+                    ".jpeg": "image/jpeg",
+                    ".png": "image/png",
+                    ".gif": "image/gif",
+                    ".webp": "image/webp",
+                }[ext] || "application/octet-stream";
+
+            res.setHeader("Content-Type", contentType);
+        }
+
+        file.pipe(res);
+    } catch (error) {
+        console.error("Download error:", error);
+        res.status(500).json({ error: "Download failed" });
+    }
+});
+
+// Add this new route before the other routes
+router.get("/download/:folder/:filename", async (req, res) => {
+    try {
+        const { folder, filename } = req.params;
+        const key = `${folder}/${filename}`;
+        const file = await getFromWasabi(key);
+
+        // Set headers for download
+        res.setHeader(
+            "Content-Disposition",
+            `attachment; filename="${filename}"`
+        );
+
+        // Set appropriate content type based on folder
+        if (folder === "converted") {
+            res.setHeader("Content-Type", "image/png");
+        } else {
+            // For original files, try to detect content type from filename
+            const ext = path.extname(filename).toLowerCase();
+            const contentType =
+                {
+                    ".jpg": "image/jpeg",
+                    ".jpeg": "image/jpeg",
+                    ".png": "image/png",
+                    ".gif": "image/gif",
+                    ".webp": "image/webp",
+                }[ext] || "application/octet-stream";
+
+            res.setHeader("Content-Type", contentType);
+        }
+
         file.pipe(res);
     } catch (error) {
         console.error("Download error:", error);
